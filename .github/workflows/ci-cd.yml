@@ -15,9 +15,10 @@ jobs:
   build:
     name: ${{ matrix.IMAGE_NAME }}@${{ matrix.NPM_TAG }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     strategy:
+      max-parallel: 10
       fail-fast: false
       matrix:
         node_test: [10] # node version for the test suite.
@@ -68,6 +69,10 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: ${{ matrix.node_test }}
+      
+      - name: Install additional libraries
+        shell: bash
+        run: sudo apt-get install build-essential libx11-dev
 
       - name: Lint
         shell: bash
@@ -83,12 +88,13 @@ jobs:
         id: check_changed
         if: github.event_name == 'pull_request'
         shell: bash
+        # TODO: Turn check_changed on when ready to merge, disabling so all images are built.
         run: |
           git fetch origin master:master
           RETURN_CODE=$(./check_changed.sh ${{ matrix.IMAGE_NAME }});
           if [ $RETURN_CODE -eq 137 ]; then
              echo "No changes in ${{ matrix.IMAGE_NAME }}, terminating."
-             echo ::set-output name=status::'terminate'
+             echo ::set-output name=status::'continue'
           elif [ $RETURN_CODE -ne 0]; then
             echo "Error happened in check_changed"
             exit $RETURN_CODE;
@@ -99,4 +105,4 @@ jobs:
       - name: Build
         if: github.event_name != 'pull_request' || steps.check_changed.outputs.status == 'continue'
         shell: bash
-        run: ./build_container.sh ${{ matrix.NPM_TAG }} ${{ matrix.IMAGE_NAME }} ${{ matrix.node }} ${{matrix.PORT}} ${{matrix.ENV_VARS}}
+        run: ./build_container.sh ${{ matrix.NPM_TAG }} ${{ matrix.IMAGE_NAME }} ${{ matrix.node }} ${{ secrets.GITHUB_TOKEN }} ${{matrix.PORT}} ${{matrix.ENV_VARS}}
